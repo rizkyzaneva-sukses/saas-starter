@@ -5,8 +5,8 @@ import { getUser, getTeamForUser } from '@/lib/db/queries';
 import { SWRConfig } from 'swr';
 
 export const metadata: Metadata = {
-  title: 'Next.js SaaS Starter',
-  description: 'Get started quickly with Next.js, Postgres, and Stripe.'
+  title: 'LaundryKu - Manajemen Laundry',
+  description: 'Kelola outlet, pelanggan, layanan, dan pesanan laundry dalam satu aplikasi.'
 };
 
 export const viewport: Viewport = {
@@ -22,7 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html
-      lang="en"
+      lang="id"
       className={`bg-white dark:bg-gray-950 text-black dark:text-white ${manrope.className}`}
     >
       <body className="min-h-[100dvh] bg-gray-50">
