@@ -64,12 +64,22 @@ export function Login({ mode = 'signin' }: { mode?: 'signin' | 'signup' }) {
           </div>
 
           <div>
-            <Label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Kata sandi
-            </Label>
+            <div className="flex items-baseline justify-between">
+              <Label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Kata sandi
+              </Label>
+              {mode === 'signin' && (
+                <Link
+                  href="/lupa-password"
+                  className="text-sm font-medium text-orange-700 hover:underline dark:text-orange-400"
+                >
+                  Lupa password?
+                </Link>
+              )}
+            </div>
             <div className="mt-1">
               <Input
                 id="password"

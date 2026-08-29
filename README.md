@@ -117,3 +117,113 @@ While this template is intentionally minimal and to be used as a learning resour
 - https://makerkit.dev
 - https://zerotoshipped.com
 - https://turbostarter.dev
+
+---
+
+## LaundryKu — Fase 1–4
+
+Repo ini sedang diubah dari SaaS starter generik menjadi aplikasi laundry Indonesia.
+Cakupan, aturan hitung, dan batasannya ada di [PRD-FASE-1.md](PRD-FASE-1.md) (POS & nota)
+[PRD-FASE-2.md](PRD-FASE-2.md) (antrian, WhatsApp, laporan), dan
+[PRD-FASE-3.md](PRD-FASE-3.md) (paket, penagihan, onboarding), dan
+[PRD-FASE-4.md](PRD-FASE-4.md) (email undangan & reset password).
+
+### Deploy ke produksi
+
+Panduan lengkap VPS + EasyPanel ada di [DEPLOY_EASYPANEL.md](DEPLOY_EASYPANEL.md).
+Ringkasnya: `Dockerfile` sudah menjalankan migrasi dan menyiapkan paket langganan
+otomatis setiap container start, jadi tidak ada langkah manual yang bisa terlupa.
+
+Satu hal yang paling sering salah: **`BASE_URL` wajib diisi domain asli**. Kalau
+tidak, tautan undangan dan reset password mengarah ke `localhost` tanpa error apa pun.
+
+### Menjalankan di lokal
+
+Butuh PostgreSQL yang sudah jalan. Isi `.env` (lihat `.env.example`), lalu:
+
+```bash
+pnpm install
+pnpm db:migrate
+pnpm db:seed
+pnpm db:seed:laundry
+pnpm db:seed:paket
+pnpm dev
+```
+
+`pnpm db:seed` membuat user awal `test@test.com` / `admin123`.
+`pnpm db:seed:laundry` mengisi 2 outlet, 8 layanan, dan 3 pelanggan contoh.
+`pnpm db:seed:paket` menyiapkan paket Gratis/Pro/Bisnis — **wajib**, tanpa ini halaman
+Langganan akan error. Ketiganya aman dijalankan berulang.
+
+Akun yang mendaftar lewat `/sign-up` akan diarahkan ke onboarding untuk membuat outlet
+pertama dan memilih layanan awal.
+
+### Halaman yang sudah ada
+
+| Route | Isi |
+|---|---|
+| `/dashboard/pos` | POS kasir: pilih pelanggan & outlet, input cucian, hitung otomatis, simpan + DP |
+| `/dashboard/antrian` | Papan antrian produksi — kolom per status, tombol maju/mundur, penanda terlambat |
+| `/dashboard/laporan` | Omzet, piutang, layanan terlaris, per outlet — Owner / Manajer |
+| `/dashboard/notifikasi` | Template & sakelar WhatsApp + riwayat pengiriman — Owner / Manajer |
+| `/dashboard/langganan` | Paket aktif, pemakaian vs batas, upgrade, riwayat tagihan |
+| `/dashboard/mulai` | Onboarding tenant baru: outlet pertama + layanan awal |
+| `/pricing` | Halaman harga publik dalam Rupiah |
+| `/lupa-password` | Minta tautan reset password |
+| `/reset-password/[token]` | Buat password baru lewat tautan dari email |
+| `/dashboard/pesanan` | Daftar pesanan, filter status, pencarian |
+| `/dashboard/pesanan/[id]` | Detail, riwayat status, pembayaran, tombol ubah status |
+| `/dashboard/pesanan/[id]/nota` | Nota siap cetak thermal 58 mm / 80 mm |
+| `/dashboard/pelanggan` | CRUD pelanggan (hapus diblokir kalau sudah punya pesanan) |
+| `/dashboard/layanan` | CRUD layanan & harga — Owner / Manajer |
+| `/dashboard/outlet` | CRUD outlet — Owner ubah, Manajer lihat saja |
+
+### Catatan penting
+
+- **Uang disimpan sebagai integer Rupiah**, bukan desimal. Semua rumus terpusat di
+  [lib/laundry/pricing.ts](lib/laundry/pricing.ts) — jangan hitung ulang di komponen.
+- **Harga tidak pernah dipercaya dari client.** Server membaca ulang harga dari database
+  saat menyimpan pesanan.
+- Tabel domain laundry pakai `timestamptz` (UTC di DB, tampil WIB). Tabel bawaan starter
+  (`users`, `teams`, dll) masih `timestamp` tanpa timezone — belum diperbaiki.
+- **Jangan pakai subquery berkorelasi di dalam `` sql`` `` drizzle.** Drizzle merender kolom
+  tanpa prefix tabel, jadi `where ${orders.customerId} = ${customers.id}` menjadi
+  `where "customer_id" = "id"` dan diam-diam salah. Pakai LEFT JOIN + GROUP BY.
+- **Stripe sudah dicabut seluruhnya** di Fase 3, diganti adapter Xendit/Midtrans. Tanpa
+  kredensial, penagihan berjalan dalam **mode simulasi**: tagihan tetap tercatat, tapi
+  pelunasannya lewat halaman simulasi internal. Isi `BILLING_PROVIDER` beserta kuncinya
+  di `.env` untuk mengaktifkan pembayaran asli.
+- **Batas paket ditegakkan di server action**, bukan disembunyikan di UI — lihat
+  [lib/billing/batas.ts](lib/billing/batas.ts).
+- **Webhook penagihan wajib lolos verifikasi tanda tangan**, dan `lunasiInvoice`
+  idempoten karena gateway mengirim ulang sampai dapat balasan 200.
+- **Jangan menambahkan `<head>` manual di root layout.** Next App Router mengelola
+  `<head>` sendiri; menyisipkannya manual membuat skrip streaming tidak terkirim, dan
+  semua komponen yang menunggu promise `SWRConfig` tersuspend selamanya tanpa pesan error.
+- **Email juga punya mode simulasi.** Tanpa `RESEND_API_KEY` atau `SMTP_URL`, isi email
+  dirender dan dicatat di tabel `email_log`, tapi tidak dikirim. Isi `EMAIL_PROVIDER`
+  (`resend` atau `smtp`) untuk mengirim sungguhan.
+- **Token reset password disimpan sebagai hash**, dan tautannya disamarkan sebelum isi
+  email masuk ke log — kalau tidak, `email_log` jadi daftar kunci cadangan setiap akun.
+- **Client Postgres di-cache di `globalThis`** ([lib/db/drizzle.ts](lib/db/drizzle.ts)).
+  Tanpa itu setiap hot-reload membuat koneksi baru tanpa menutup yang lama, dan server
+  Postgres kehabisan slot (`sorry, too many clients already`) — ikut mematikan proyek lain
+  yang berbagi server yang sama.
+- **WhatsApp berjalan dalam mode simulasi** selama `WA_TOKEN` kosong: pesan dirender dan
+  dicatat di tabel `notifications`, tapi tidak dikirim. Isi `WA_PROVIDER` (`fonnte` atau
+  `wablas`) dan `WA_TOKEN` di `.env` untuk mengirim sungguhan. Token sengaja **tidak**
+  disimpan di database.
+- **Angka laporan jangan dihitung lewat satu JOIN.** Menggabung `orders` dengan `payments`
+  atau `order_items` dalam satu query melipatgandakan baris dan menggelembungkan omzet —
+  lihat `getRingkasanLaporan` di [lib/laundry/queries-fase2.ts](lib/laundry/queries-fase2.ts).
+- **Logika yang dipakai server component jangan ditaruh di berkas `'use client'`.**
+  TypeScript tidak menangkapnya; errornya baru muncul saat halaman dibuka. Modul netral
+  seperti [lib/laundry/periode.ts](lib/laundry/periode.ts) adalah tempatnya.
+
+### Belum ada (menyusul)
+
+Verifikasi alamat email saat pendaftaran · panel super-admin (lihat semua tenant,
+suspend, MRR) · antar-jemput & kurir ·
+laporan laba rugi (butuh tabel pengeluaran) · nomor WhatsApp per tenant · harga khusus
+per outlet lewat UI (tabel `service_prices` sudah ada, formnya belum) · penugasan anggota
+ke outlet lewat UI · reset password & email · tracking publik · PWA offline · faktur PPN.
