@@ -22,7 +22,7 @@ WORKDIR /app
 
 # --- Dependensi lengkap (untuk build) ----------------------------------------
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc* ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && \
     pnpm install --frozen-lockfile
@@ -49,7 +49,7 @@ ENV HOSTNAME=0.0.0.0
 # Dependensi produksi saja. `drizzle-kit` dan `tsx` ada di dependencies, jadi
 # migrasi dan seed bisa dijalankan dari dalam container tanpa mengunduh apa pun
 # dari internet saat deploy.
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml .npmrc* ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store && \
     pnpm install --frozen-lockfile --prod
